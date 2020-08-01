@@ -1,0 +1,43 @@
+FROM arm64v8/debian:buster-20200720
+ENV LANG            C.UTF-8
+RUN apt-get update \
+ && apt-get install -y wget curl git xz-utils \
+                       gcc make \
+                       libncurses5 zlib1g-dev libtinfo-dev libnuma-dev
+RUN mkdir /root/ghc && cd /root/ghc
+
+# Mostly based on this: https://www.haskell.org/ghc/blog/20200515-ghc-on-arm.html
+#
+# Note 1:
+# The GHC ARM binaries are distributed with 'deb9' in their name. However we
+# can't seem to use Debian 9 for this build. Why? Because GHC-8.10.1 requires
+# llvm-9 for code generation on aarch64 and llvm-9 requires glibc>=2.27 but
+# Debian 9 ships with 2.24. So why does GHCHQ ship GHC binaries for aarch64
+# built on Debian 9? No clue. We are using Debian 10 for the build. This
+# assumes that the GHC binaries built on Debian 9 will work on Debian 10
+
+# Note 2:
+# cabal-install-3.2.0.0 for aarch64 (required for ghc-8.10.1) needs to be
+# downloaded from this non GHCHQ source : home.smart-cactus.org/~ben which
+# seems to be okay given that Ben Gamari works on GHC.
+
+RUN wget 'https://downloads.haskell.org/ghc/8.10.1/ghc-8.10.1-aarch64-deb9-linux.tar.xz' \
+ && tar -xf ghc-8.10.1-aarch64-deb9-linux.tar.xz \
+ && cd ghc-8.10.1 \
+ && ./configure \
+ && make install \
+ && cd .. && rm -rf ghc-8.10.1 ghc-8.10.1-aarch64-deb9-linux.tar.xz
+
+RUN wget 'http://home.smart-cactus.org/~ben/ghc/cabal-install-3.2.0.0-aarch64-debian9-linux.tar.xz' \
+ && tar -xf cabal-install-3.2.0.0-aarch64-debian9-linux.tar.xz \
+ && mv cabal /usr/local/bin/ \
+ && rm -rf cabal-install-3.2.0.0-aarch64-debian9-linux.tar.xz
+
+# Why aren't we using apt.llvm.org for installing llvm-9? Because aarch64 is
+# not a supported architecture
+
+RUN wget 'https://github.com/llvm/llvm-project/releases/download/llvmorg-9.0.1/clang+llvm-9.0.1-aarch64-linux-gnu.tar.xz' \
+ && tar -xf clang+llvm-9.0.1-aarch64-linux-gnu.tar.xz \
+ && cd clang+llvm-9.0.1-aarch64-linux-gnu/ \
+ && cp -R * /usr/local/ \
+ && rm -rf clang+llvm-9.0.1-aarch64-linux-gnu.tar.xz clang+llvm-9.0.1-aarch64-linux-gnu/

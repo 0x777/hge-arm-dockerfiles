@@ -1,0 +1,27 @@
+FROM ghc:8.10.1-aarch64 AS builder
+
+RUN apt-get update && apt-get install -y upx libpq-dev libkrb5-dev libssl-dev
+
+RUN git clone 'https://github.com/hasura/graphql-engine.git' \
+ && cd graphql-engine/server \
+ && git checkout v1.3.0 \
+ && cabal update \
+ && cabal build -j
+
+RUN strip --strip-unneeded /graphql-engine/server/dist-newstyle/build/aarch64-linux/ghc-8.10.1/graphql-engine-1.0.0/x/graphql-engine/opt/build/graphql-engine/graphql-engine \
+ && upx /graphql-engine/server/dist-newstyle/build/aarch64-linux/ghc-8.10.1/graphql-engine-1.0.0/x/graphql-engine/opt/build/graphql-engine/graphql-engine
+
+FROM arm64v8/debian:buster-20200720-slim
+ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
+
+# The dependencies are determined by looking at the output of this command in the builder image
+# ldd /graphql-engine/server/dist-newstyle/build/aarch64-linux/ghc-8.10.1/graphql-engine-1.0.0/x/graphql-engine/opt/build/graphql-engine/graphql-engine | tail -n +2 | awk '{print $3;}' | awk 'NF' | apt-file search -f - | awk '{print $1;}' | uniq | sed 's/.$//'
+# and this command in the buster-slim image:
+# apt list --installed | sed 's/\/.*$//' | sort
+# compute the difference between the above lists (1 - 2) and that should give
+# the list of packages to be installed
+
+RUN apt-get update \
+ && apt-get install -y ca-certificates libkrb5-3 libpq5 libnuma1
+COPY --from=builder /graphql-engine/server/dist-newstyle/build/aarch64-linux/ghc-8.10.1/graphql-engine-1.0.0/x/graphql-engine/opt/build/graphql-engine/graphql-engine /bin
+CMD ["graphql-engine", "serve"]
